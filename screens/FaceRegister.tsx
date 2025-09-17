@@ -15,17 +15,17 @@ import { Ionicons } from '@expo/vector-icons';
 
 const { width, height } = Dimensions.get('window');
 
-interface FaceRegistrationScreenProps {
-  onComplete?: () => void;
-}
-
-const FaceRegistrationScreen: React.FC<FaceRegistrationScreenProps> = ({ onComplete }) => {
+export default function FaceRegister({ navigation, route }) {
   const [permission, requestPermission] = useCameraPermissions();
-  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+  const [capturedPhoto, setCapturedPhoto] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
-  const cameraRef = useRef<CameraView>(null);
+  const cameraRef = useRef(null);
+
+  // Verifica se é cadastro ou atualização de perfil
+  const isRegistration = route.params?.isRegistration || false;
+  const currentPhoto = route.params?.currentPhoto || null;
 
   // Animações
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -101,7 +101,9 @@ const FaceRegistrationScreen: React.FC<FaceRegistrationScreenProps> = ({ onCompl
     scaleAnim.setValue(0);
   };
 
-  const registerFace = async () => {
+  const confirmPhoto = async () => {
+    if (!capturedPhoto) return;
+
     setIsProcessing(true);
 
     // Simula processamento
@@ -116,7 +118,7 @@ const FaceRegistrationScreen: React.FC<FaceRegistrationScreenProps> = ({ onCompl
           friction: 7,
           useNativeDriver: true,
         }),
-        Animated.delay(2000),
+        Animated.delay(1500),
         Animated.timing(successAnim, {
           toValue: 0,
           duration: 500,
@@ -124,11 +126,22 @@ const FaceRegistrationScreen: React.FC<FaceRegistrationScreenProps> = ({ onCompl
         }),
       ]).start(() => {
         setShowSuccess(false);
-        setCapturedPhoto(null);
-        scaleAnim.setValue(0);
-        onComplete?.();
+        
+        if (isRegistration) {
+          // Caso cadastro: volta para Register
+          navigation.navigate('Register', { photoUri: capturedPhoto });
+        } else {
+          // Caso atualização: volta para a tela anterior com a foto
+          navigation.goBack();
+          // Se você usar callback, pode fazer assim:
+          // route.params?.onPhotoUpdate?.(capturedPhoto);
+        }
       });
-    }, 1500);
+    }, 1000);
+  };
+
+  const handleCancel = () => {
+    navigation.goBack();
   };
 
   if (!permission) {
@@ -142,14 +155,22 @@ const FaceRegistrationScreen: React.FC<FaceRegistrationScreenProps> = ({ onCompl
   if (!permission.granted) {
     return (
       <View style={styles.container}>
-        <Ionicons name="camera-outline" size={80} color="#666" />
-        <Text style={styles.permissionText}>Acesso à câmera negado</Text>
-        <Text style={styles.permissionSubtext}>
-          Conceda permissão para usar a câmera
-        </Text>
-        <TouchableOpacity style={styles.primaryButton} onPress={requestPermission}>
-          <Text style={[styles.buttonText, { color: '#000' }]}>Conceder Permissão</Text>
-        </TouchableOpacity>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={handleCancel}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
+        
+        <View style={styles.permissionContainer}>
+          <Ionicons name="camera-outline" size={80} color="#666" />
+          <Text style={styles.permissionText}>Acesso à câmera negado</Text>
+          <Text style={styles.permissionSubtext}>
+            Conceda permissão para usar a câmera
+          </Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={requestPermission}>
+            <Text style={[styles.buttonText, { color: '#000' }]}>Conceder Permissão</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -164,10 +185,23 @@ const FaceRegistrationScreen: React.FC<FaceRegistrationScreenProps> = ({ onCompl
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
       <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
-        <Text style={styles.title}>Cadastro Facial</Text>
-        <Text style={styles.subtitle}>
-          {capturedPhoto ? 'Confirme sua foto' : 'Posicione seu rosto na moldura'}
-        </Text>
+        <TouchableOpacity style={styles.backButton} onPress={handleCancel}>
+          <Ionicons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
+        
+        <View style={styles.headerContent}>
+          <Text style={styles.title}>
+            {isRegistration ? 'Cadastro Facial' : 'Atualizar Foto'}
+          </Text>
+          <Text style={styles.subtitle}>
+            {capturedPhoto 
+              ? 'Confirme sua foto' 
+              : isRegistration 
+                ? 'Posicione seu rosto na moldura'
+                : 'Capture sua nova foto de perfil'
+            }
+          </Text>
+        </View>
       </Animated.View>
 
       <View style={styles.cameraContainer}>
@@ -243,7 +277,7 @@ const FaceRegistrationScreen: React.FC<FaceRegistrationScreenProps> = ({ onCompl
 
             <TouchableOpacity
               style={[styles.primaryButton, isProcessing && styles.disabledButton]}
-              onPress={registerFace}
+              onPress={confirmPhoto}
               disabled={isProcessing}
             >
               {isProcessing ? (
@@ -251,7 +285,7 @@ const FaceRegistrationScreen: React.FC<FaceRegistrationScreenProps> = ({ onCompl
               ) : (
                 <>
                   <Ionicons name="checkmark" size={20} color="#000" />
-                  <Text style={[styles.buttonText, { color: '#000' }]}>Cadastrar</Text>
+                  <Text style={[styles.buttonText, { color: '#000' }]}>Confirmar</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -273,22 +307,54 @@ const FaceRegistrationScreen: React.FC<FaceRegistrationScreenProps> = ({ onCompl
             <Animated.View style={styles.successIcon}>
               <Ionicons name="checkmark-circle" size={80} color="#4CAF50" />
             </Animated.View>
-            <Text style={styles.successTitle}>Rosto Cadastrado!</Text>
+            <Text style={styles.successTitle}>
+              {isRegistration ? 'Foto Confirmada!' : 'Foto Atualizada!'}
+            </Text>
             <Text style={styles.successMessage}>
-              Seu rosto foi cadastrado com sucesso no sistema
+              {isRegistration 
+                ? 'Retornando para o cadastro...' 
+                : 'Sua foto de perfil foi atualizada!'
+              }
             </Text>
           </View>
         </Animated.View>
       )}
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  header: { paddingTop: 60, paddingHorizontal: 20, paddingBottom: 20, alignItems: 'center' },
+  header: { 
+    paddingTop: 60, 
+    paddingHorizontal: 20, 
+    paddingBottom: 20, 
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerContent: {
+    flex: 1,
+    alignItems: 'center',
+    marginLeft: -40, // Compensa o espaço do botão para centralizar
+  },
   title: { fontSize: 28, fontWeight: 'bold', color: '#fff', marginBottom: 8 },
   subtitle: { fontSize: 16, color: '#ccc', textAlign: 'center', lineHeight: 22 },
+  
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  
   cameraContainer: { flex: 1, position: 'relative', marginHorizontal: 20, borderRadius: 20, overflow: 'hidden' },
   camera: { flex: 1 },
   faceFrame: { position: 'absolute', top: '50%', left: '50%', width: 250, height: 300, marginLeft: -125, marginTop: -150, borderRadius: 125 },
@@ -317,7 +383,5 @@ const styles = StyleSheet.create({
   successTitle: { fontSize: 24, fontWeight: 'bold', color: '#fff', marginBottom: 10 },
   successMessage: { fontSize: 16, color: '#ccc', textAlign: 'center', lineHeight: 22 },
   permissionText: { color: '#fff', fontSize: 18, textAlign: 'center', marginTop: 20 },
-  permissionSubtext: { color: '#ccc', fontSize: 14, textAlign: 'center', marginTop: 10, paddingHorizontal: 40 },
+  permissionSubtext: { color: '#ccc', fontSize: 14, textAlign: 'center', marginTop: 10, paddingHorizontal: 40, marginBottom: 30 },
 });
-
-export default FaceRegistrationScreen;

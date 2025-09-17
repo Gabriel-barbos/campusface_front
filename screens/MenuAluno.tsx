@@ -11,7 +11,7 @@ import {
 
 const { width } = Dimensions.get('window');
 
-export default function MenuAluno({ navigation }: any) {
+export default function MenuAluno({ navigation }) {
   const menuItems = [
     {
       id: 1,
@@ -24,12 +24,16 @@ export default function MenuAluno({ navigation }: any) {
     },
     {
       id: 2,
-      title: "Atualizar Cadastro",
-      subtitle: "Atualize seus dados",
-      icon: "🎭",
-      action: () => navigation.navigate("FaceRegister"),
+      title: "Atualizar Foto",
+      subtitle: "Atualize sua foto de perfil",
+      icon: "📸",
+      action: () => navigation.navigate("FaceRegister", { 
+        isRegistration: false,
+        // Você pode passar a foto atual do usuário se tiver:
+        // currentPhoto: user.photoUri 
+      }),
       gradient: ["#333", "#333"],
-      description: "Mantenha seu perfil sempre atualizado"
+      description: "Capture uma nova foto para seu perfil"
     }
   ];
 
@@ -83,8 +87,6 @@ export default function MenuAluno({ navigation }: any) {
           </TouchableOpacity>
         ))}
       </View>
-
-   
     </SafeAreaView>
   );
 }

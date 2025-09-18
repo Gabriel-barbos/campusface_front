@@ -32,19 +32,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loadUser();
   }, []);
 
-  // LOGIN - Ajustado para usar 'password' em vez de 'senha'
+  // LOGIN - A API espera 'email' e 'password'
   const login = async (email: string, password: string) => {
     try {
       const res = await axios.post(`${API_URL}/login`, { 
         email, 
-        password // Mudei de 'senha' para 'password'
+        password 
+      }, {
+        headers: {
+          "ngrok-skip-browser-warning": "true" // Header para ngrok
+        }
       });
       
-      const { user: loggedUser, token } = res.data;
+      console.log("Resposta da API de login:", res.data);
+      
+      const { success, data } = res.data;
+      
+      if (success && data) {
+        // Agora pegamos user e token de dentro de data
+        const { user: loggedUser, token } = data;
+        
+        if (!loggedUser || !loggedUser.role) {
+          throw new Error("Dados do usuário não encontrados na resposta");
+        }
 
-      setUser(loggedUser.role);
-      await AsyncStorage.setItem("token", token);
-      await AsyncStorage.setItem("user", JSON.stringify(loggedUser));
+        setUser(loggedUser.role);
+        await AsyncStorage.setItem("token", token);
+        await AsyncStorage.setItem("user", JSON.stringify(loggedUser));
+      } else {
+        throw new Error("Credenciais inválidas");
+      }
+      
     } catch (error: any) {
       console.error("Erro no login:", error.response?.data || error.message);
       Alert.alert(

@@ -40,7 +40,6 @@ export default function LoginScreen({ navigation }) {
     setIsLoading(true);
     try {
       await login(email, password);
-      navigation.replace("Home"); // vai para tela principal
     } catch (error: any) {
       showError(error.message || "Erro ao conectar ao servidor");
     } finally {

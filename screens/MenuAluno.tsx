@@ -8,7 +8,7 @@ import {
   StatusBar,
   Dimensions 
 } from "react-native";
-
+import { QrCode, Camera } from "lucide-react-native";
 const { width } = Dimensions.get('window');
 
 export default function MenuAluno({ navigation }) {
@@ -17,7 +17,7 @@ export default function MenuAluno({ navigation }) {
       id: 1,
       title: "QR Code",
       subtitle: "Escaneie seu código de acesso",
-      icon: "📱",
+      icon: <QrCode />,
       action: () => navigation.navigate("QrCodePage"),
       gradient: ["#000", "#333"],
       description: "Acesso via QR Code"
@@ -26,7 +26,7 @@ export default function MenuAluno({ navigation }) {
       id: 2,
       title: "Atualizar Foto",
       subtitle: "Atualize sua foto de perfil",
-      icon: "📸",
+      icon: <Camera/>,
       action: () => navigation.navigate("FaceRegister", { 
         isRegistration: false,
         // Você pode passar a foto atual do usuário se tiver:

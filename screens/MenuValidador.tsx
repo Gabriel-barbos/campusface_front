@@ -7,6 +7,7 @@ import {
   SafeAreaView, 
   StatusBar 
 } from "react-native";
+import { ScanQrCode, ScanFace } from "lucide-react-native";
 
 export default function MenuValidador({ navigation }: any) {
   const menuItems = [
@@ -14,7 +15,7 @@ export default function MenuValidador({ navigation }: any) {
       id: 1,
       title: "Ler QR Code",
       subtitle: "Escaneie QR Code",
-      icon: "📷",
+      icon: <ScanQrCode />,
       action: () => navigation.navigate("QrCodeReader"),
       description: "Use a câmera para validar o acesso via QR Code",
     },
@@ -22,7 +23,7 @@ export default function MenuValidador({ navigation }: any) {
       id: 2,
       title: "Reconhecimento Facial",
       subtitle: "Acesso via reconhecimento facial",
-      icon: "👤",
+      icon: <ScanFace />,
       action: () => navigation.navigate("FaceReader"),
       description: "Valide o acesso com o rosto ",
     }

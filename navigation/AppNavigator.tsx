@@ -7,7 +7,15 @@ import FaceRegister from "../screens/FaceRegister";
 import AlunoTabs from "./AlunoTabs";
 import ValidadorTabs from "./ValidadorTabs";
 
-const Stack = createNativeStackNavigator();
+export type RootStackParamList = {
+  Login: undefined;
+  Register: undefined;
+  FaceRegister: { isRegistration?: boolean } | undefined;
+  Aluno: undefined;
+  Validador: undefined;
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function AppNavigator() {
   const { user } = useAuth();
@@ -20,12 +28,12 @@ export default function AppNavigator() {
           <Stack.Screen name="Register" component={RegisterScreen} />
           <Stack.Screen name="FaceRegister" component={FaceRegister} />
         </>
-      ) : user === "aluno" ? (
+      ) : user === "MEMBER" ? ( // Mudou de "membro" para "MEMBER"
         <>
           <Stack.Screen name="Aluno" component={AlunoTabs} />
           <Stack.Screen name="FaceRegister" component={FaceRegister} />
         </>
-      ) : (
+      ) : ( // user === "VALIDATOR"
         <>
           <Stack.Screen name="Validador" component={ValidadorTabs} />
           <Stack.Screen name="FaceRegister" component={FaceRegister} />

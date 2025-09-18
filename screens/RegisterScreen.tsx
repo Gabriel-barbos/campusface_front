@@ -14,15 +14,16 @@ import {
   Image
 } from "react-native";
 import { useAuth } from "../AuthContext";
+import { Pencil } from "lucide-react-native";
 
 export default function RegisterScreen({ navigation, route }) {
-//   const { register } = useAuth();
+ const { register } = useAuth();
   const [formData, setFormData] = useState({
-    nome: "",
+    fullName: "",
     email: "",
-    senha: "",
-    documento: "",
-    acesso: "membro"
+    hashedPassword: "", // Voltando para 'hashedPassword' para testar com a API
+    document: "",
+    role: "MEMBER"
   });
   const [photo, setPhoto] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -35,9 +36,8 @@ export default function RegisterScreen({ navigation, route }) {
   }, [route.params?.photoUri]);
 
   const accessTypes = [
-    { value: "membro", label: "Membro" },
-    { value: "validador", label: "Validador" },
-    { value: "admin", label: "Admin" }
+    { value: "MEMBER", label: "Membro" },
+    { value: "VALIDATOR", label: "Validador" },
   ];
 
   const handleInputChange = (field, value) => {
@@ -48,21 +48,25 @@ export default function RegisterScreen({ navigation, route }) {
     navigation.navigate('FaceRegister', { isRegistration: true });
   };
 
-//   const handleRegister = async () => {
-//     if (!formData.nome || !formData.email || !formData.senha || !formData.documento) {
-//       Alert.alert("Erro", "Preencha todos os campos obrigatórios!");
-//       return;
-//     }
-    
-//     setIsLoading(true);
-//     try {
-//       await register(formData, photo);
-//     } catch (error) {
-//       // Handle error if needed
-//     } finally {
-//       setIsLoading(false);
-//     }
-//   };
+const handleRegister = async () => {
+  // Validação dos campos obrigatórios
+  if (!formData.fullName || !formData.email || !formData.hashedPassword || !formData.document) {
+    Alert.alert("Erro", "Preencha todos os campos obrigatórios!");
+    return;
+  }
+
+  setIsLoading(true);
+  try {
+    await register(formData, photo);
+    // O AuthContext já mostra o alert de sucesso, então só navegamos
+    navigation.navigate("Login"); 
+  } catch (error) {
+    // O AuthContext já mostra o alert de erro, mas podemos manter este como fallback
+    console.error("Erro no registro:", error);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <SafeAreaView style={styles.container}>
@@ -85,7 +89,7 @@ export default function RegisterScreen({ navigation, route }) {
           <ScrollView showsVerticalScrollIndicator={false}>
             <Text style={styles.formTitle}>Crie sua conta</Text>
             
-            {/* Photo Upload */}
+            {/* Photo Upload - Agora com indicação de obrigatório */}
             <TouchableOpacity style={styles.photoContainer} onPress={handlePhotoSelect}>
               {photo ? (
                 <Image source={{ uri: photo }} style={styles.photoImage} />
@@ -98,23 +102,23 @@ export default function RegisterScreen({ navigation, route }) {
                 </View>
               )}
               <View style={styles.photoOverlay}>
-                <Text style={styles.photoOverlayText}>✏️</Text>
+                  <Pencil size={20} color="#fff" />
               </View>
             </TouchableOpacity>
             
             <View style={styles.inputGroup}>
               <TextInput
                 style={styles.input}
-                placeholder="Nome completo"
+                placeholder="Nome completo *"
                 placeholderTextColor="#6B7280"
-                value={formData.nome}
-                onChangeText={(value) => handleInputChange("nome", value)}
+                value={formData.fullName}
+                onChangeText={(value) => handleInputChange("fullName", value)}
                 autoCapitalize="words"
               />
               
               <TextInput
                 style={styles.input}
-                placeholder="Email"
+                placeholder="Email *"
                 placeholderTextColor="#6B7280"
                 value={formData.email}
                 onChangeText={(value) => handleInputChange("email", value)}
@@ -124,39 +128,40 @@ export default function RegisterScreen({ navigation, route }) {
               
               <TextInput
                 style={styles.input}
-                placeholder="Senha"
+                placeholder="Senha *"
                 placeholderTextColor="#6B7280"
                 secureTextEntry
-                value={formData.senha}
-                onChangeText={(value) => handleInputChange("senha", value)}
+                value={formData.hashedPassword} // Voltando para 'hashedPassword'
+                onChangeText={(value) => handleInputChange("hashedPassword", value)}
                 autoCapitalize="none"
               />
               
               <TextInput
                 style={styles.input}
-                placeholder="Documento (CPF/RG)"
+                placeholder="Documento (CPF) *"
                 placeholderTextColor="#6B7280"
-                value={formData.documento}
-                onChangeText={(value) => handleInputChange("documento", value)}
+                value={formData.document}
+                onChangeText={(value) => handleInputChange("document", value)}
                 autoCapitalize="none"
+                keyboardType="numeric"
               />
 
               {/* Access Type Selector */}
               <View style={styles.accessContainer}>
-                <Text style={styles.accessLabel}>Tipo de acesso</Text>
+                <Text style={styles.accessLabel}>Tipo de acesso *</Text>
                 <View style={styles.accessButtons}>
                   {accessTypes.map((type) => (
                     <TouchableOpacity
                       key={type.value}
                       style={[
                         styles.accessButton,
-                        formData.acesso === type.value && styles.accessButtonActive
+                        formData.role === type.value && styles.accessButtonActive
                       ]}
-                      onPress={() => handleInputChange("acesso", type.value)}
+                      onPress={() => handleInputChange("role", type.value)}
                     >
                       <Text style={[
                         styles.accessButtonText,
-                        formData.acesso === type.value && styles.accessButtonTextActive
+                        formData.role === type.value && styles.accessButtonTextActive
                       ]}>
                         {type.label}
                       </Text>
@@ -170,6 +175,7 @@ export default function RegisterScreen({ navigation, route }) {
               style={[styles.primaryButton, isLoading && styles.buttonDisabled]}
               disabled={isLoading}
               activeOpacity={0.8}
+               onPress={handleRegister} 
             >
               <Text style={styles.primaryButtonText}>
                 {isLoading ? "Criando conta..." : "Criar conta"}
@@ -199,7 +205,7 @@ export default function RegisterScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#1c1b1f",
   },
   
   keyboardView: {
@@ -303,7 +309,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "#111827",
+    backgroundColor: "#151617ff",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,

@@ -8,7 +8,8 @@ import {
   StatusBar,
   FlatList,
   Dimensions 
-} from "react-native";
+} from "react-native"; 
+
 import { Users, Shield, Building2, Search, TrendingUp } from "lucide-react-native";
 
 const { width } = Dimensions.get('window');

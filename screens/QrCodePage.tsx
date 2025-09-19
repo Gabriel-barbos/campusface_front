@@ -6,15 +6,21 @@ import {
   Dimensions,
   Animated,
   StatusBar,
+  Alert,
 } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
+import { useQrCodeService } from '../services/QRcodeService';
+import { useAuth } from '../AuthContext';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 const QrCodePage = () => {
   const [timeLeft, setTimeLeft] = useState(30);
   const [qrCodeData, setQrCodeData] = useState('');
-  const [userName] = useState('Gabriel Barbosa'); 
-  const [studentId] = useState('2024001234'); 
+  const [isLoading, setIsLoading] = useState(false);
+  
+  const { generateQrCode } = useQrCodeService();
+  const { user } = useAuth();
   
   // Animações
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -22,36 +28,46 @@ const QrCodePage = () => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
 
-  // Gera um novo QR Code 
-  const generateQRCode = () => {
-    const timestamp = Date.now();
-    const sessionId = Math.random().toString(36).substring(2, 10).toUpperCase();
-    setQrCodeData(`CAMPUS_ACCESS|${studentId}|${userName}|${timestamp}|${sessionId}`);
-    setTimeLeft(30);
-    
-    // Reset das animações
-    progressAnim.setValue(1);
-    fadeAnim.setValue(0);
-    
-    // Animação de entrada do novo QR
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 8,
-        tension: 100,
-        useNativeDriver: true,
-      })
-    ]).start();
+  // Gera um novo QR Code via API
+  const fetchNewQRCode = async () => {
+    try {
+      setIsLoading(true);
+      const response = await generateQrCode();
+      
+      if (response.success && response.data?.code) {
+        setQrCodeData(response.data.code);
+        setTimeLeft(30);
+        
+        // Reset das animações
+        progressAnim.setValue(1);
+        fadeAnim.setValue(0);
+        
+        // Animação de entrada do novo QR
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+          Animated.spring(scaleAnim, {
+            toValue: 1,
+            friction: 8,
+            tension: 100,
+            useNativeDriver: true,
+          })
+        ]).start();
+      }
+    } catch (error) {
+      console.error('Erro ao gerar QR Code:', error);
+      Alert.alert('Erro', 'Não foi possível gerar o QR Code. Tente novamente.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Timer e regeneração automática
   useEffect(() => {
-    generateQRCode();
+    fetchNewQRCode();
 
     const interval = setInterval(() => {
       setTimeLeft(prevTime => {
@@ -61,7 +77,7 @@ const QrCodePage = () => {
         progressAnim.setValue(newTime / 30);
         
         if (newTime <= 0) {
-          generateQRCode();
+          fetchNewQRCode();
           return 30;
         }
         return newTime;
@@ -93,62 +109,18 @@ const QrCodePage = () => {
     }
   }, [timeLeft]);
 
-  
   const renderQRCode = () => {
-    const size = 25; 
-    const pattern = [];
+    if (!qrCodeData) return null;
     
-    const seed = qrCodeData.split('').reduce((acc, char, i) => acc + char.charCodeAt(0) * (i + 1), 0);
-    
-    for (let row = 0; row < size; row++) {
-      for (let col = 0; col < size; col++) {
-        const index = row * size + col;
-        let isBlack = false;
-        
-        if ((row < 7 && col < 7) || (row < 7 && col >= size - 7) || (row >= size - 7 && col < 7)) {
-          if ((row === 0 || row === 6 || col === 0 || col === 6) ||
-              (row >= 2 && row <= 4 && col >= 2 && col <= 4)) {
-            isBlack = true;
-          }
-        }
-        else if (row >= size - 7 && row < size - 2 && col >= size - 7 && col < size - 2) {
-          if ((row === size - 7 || row === size - 3 || col === size - 7 || col === size - 3) ||
-              (row === size - 5 && col === size - 5)) {
-            isBlack = true;
-          }
-        }
-        else if (row === 6 && col >= 8 && col < size - 8) {
-          isBlack = col % 2 === 0;
-        }
-        else if (col === 6 && row >= 8 && row < size - 8) {
-          isBlack = row % 2 === 0;
-        }
-        else if ((row === 7 && col < 9) || (col === 7 && row < 9)) {
-          isBlack = false;
-        }
-        else {
-          const pseudoRandom = (seed * 9301 + 49297) % 233280;
-          const normalized = (pseudoRandom / 233280.0 + index * 0.1) % 1;
-          isBlack = normalized > 0.5;
-          
-          if ((row + col) % 3 === 0 && (seed + index) % 7 === 0) {
-            isBlack = !isBlack;
-          }
-        }
-        
-        pattern.push(
-          <View
-            key={`${row}-${col}`}
-            style={[
-              styles.qrBlock,
-              { backgroundColor: isBlack ? '#000' : '#fff' }
-            ]}
-          />
-        );
-      }
-    }
-    
-    return pattern;
+    return (
+      <QRCode
+        value={qrCodeData}
+        size={160}
+        backgroundColor="white"
+        color="black"
+        logoBackgroundColor="transparent"
+      />
+    );
   };
 
   const progressWidth = progressAnim.interpolate({
@@ -160,7 +132,6 @@ const QrCodePage = () => {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       
-      {/* Carteirinha */}
       <Animated.View style={[
         styles.card,
         {
@@ -168,31 +139,31 @@ const QrCodePage = () => {
           transform: [{ scale: scaleAnim }]
         }
       ]}>
-        {/* Header da carteirinha */}
         <View style={styles.cardHeader}>
           <Text style={styles.institutionName}>CAMPUS ZONA LESTE</Text>
           <Text style={styles.cardType}>QR Code de entrada</Text>
         </View>
 
-        {/* Informações do estudante */}
         <View style={styles.studentInfo}>
-          <Text style={styles.studentName}>{userName}</Text>
-          <Text style={styles.studentId}>Matrícula: {studentId}</Text>
+          <Text style={styles.studentName}>{user?.fullName || 'Usuário'}</Text>
+          <Text style={styles.studentId}>CPF: {user?.document || 'N/A'}</Text>
         </View>
 
-        {/* QR Code */}
         <View style={styles.qrSection}>
           <Text style={styles.qrLabel}>QR Code</Text>
           <View style={styles.qrDisplay}>
             <View style={styles.qrCodeArea}>
-              <View style={styles.qrPattern}>
-                {renderQRCode()}
-              </View>
+              {isLoading ? (
+                <View style={styles.loadingContainer}>
+                  <Text style={styles.loadingText}>Carregando...</Text>
+                </View>
+              ) : (
+                renderQRCode()
+              )}
             </View>
           </View>
         </View>
 
-        {/* Timer com barra de progresso */}
         <View style={styles.timerSection}>
           <Text style={styles.timerLabel}>Expira em:</Text>
           
@@ -210,7 +181,6 @@ const QrCodePage = () => {
             </Text>
           </Animated.View>
 
-          {/* Barra de progresso */}
           <View style={styles.progressBarContainer}>
             <Animated.View 
               style={[
@@ -224,8 +194,6 @@ const QrCodePage = () => {
             <View style={styles.progressBarBg} />
           </View>
         </View>
-
-    
       </Animated.View>
     </View>
   );
@@ -293,12 +261,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontFamily: 'monospace',
   },
-  validity: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 4,
-  },
   qrSection: {
     alignItems: 'center',
     marginBottom: 24,
@@ -330,9 +292,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
-  qrBlock: {
-    width: '4%', // 25x25 grid
-    height: '4%',
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#666',
   },
   timerSection: {
     alignItems: 'center',
@@ -372,21 +339,6 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 3,
     zIndex: 1,
-  },
-  cardFooter: {
-    alignItems: 'center',
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e5e5',
-  },
-  warningText: {
-    fontSize: 11,
-    color: '#666',
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  warningIcon: {
-    fontSize: 11,
   },
 });
 

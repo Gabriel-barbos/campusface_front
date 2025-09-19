@@ -6,6 +6,8 @@ import MenuAluno from "../screens/MenuAluno";
 import FaceRegister from "../screens/FaceRegister";
 import QrCodePage from "../screens/QrCodePage";
 import LogoutScreen from "../screens/LogoutScreen";
+import HubScreen from "../screens/HubScreen";
+
 
 const Tab = createBottomTabNavigator();
 
@@ -40,6 +42,9 @@ export default function AlunoTabs() {
             case "Logout":
               iconName = "log-out";
               break;
+            case "HubScreen":
+              iconName = "home";
+              break;
           }
           return <Ionicons name={iconName} size={size + 2} color={color} />;
         },
@@ -59,6 +64,11 @@ export default function AlunoTabs() {
         name="FaceRegister"
         component={FaceRegister}
         options={{ title: "Atualizar Cadastro" }}
+      />
+       <Tab.Screen
+        name="HubScreen"
+        component={HubScreen}
+        options={{ title: "Ver Hubs" }}
       />
       <Tab.Screen
         name="Logout"

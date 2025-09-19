@@ -3,10 +3,20 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { Alert } from "react-native";
 
-type UserType = "MEMBER" | "VALIDATOR" | null;
+type UserType = "MEMBER" | "VALIDATOR" | "ADMIN" | null;
+
+interface LoggedUser {
+  id: string;
+  fullName: string;
+  email: string;
+  document: string;
+  faceImageId: string;
+  role: UserType;
+}
 
 interface AuthContextType {
-  user: UserType;
+  user: LoggedUser | null;
+  token: string | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   register: (formData: any, photoUri?: string) => Promise<void>;
@@ -15,54 +25,43 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({} as any);
 export const useAuth = () => useContext(AuthContext);
 
-const API_URL = "https://baef7bb3c366.ngrok-free.app/auth";
+const API_URL = "https://949fbca4150a.ngrok-free.app/auth";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<UserType>(null);
+  const [user, setUser] = useState<LoggedUser | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
-  // Carrega usuário do AsyncStorage quando o app inicia
+  // Carregar dados salvos no AsyncStorage
   useEffect(() => {
-    const loadUser = async () => {
+    const loadAuthData = async () => {
       const storedUser = await AsyncStorage.getItem("user");
-      if (storedUser) {
-        const userData = JSON.parse(storedUser);
-        setUser(userData.role);
+      const storedToken = await AsyncStorage.getItem("token");
+      if (storedUser && storedToken) {
+        setUser(JSON.parse(storedUser));
+        setToken(storedToken);
       }
     };
-    loadUser();
+    loadAuthData();
   }, []);
 
-  // LOGIN - A API espera 'email' e 'password'
   const login = async (email: string, password: string) => {
     try {
-      const res = await axios.post(`${API_URL}/login`, { 
-        email, 
-        password 
-      }, {
-        headers: {
-          "ngrok-skip-browser-warning": "true" // Header para ngrok
-        }
+      const res = await axios.post(`${API_URL}/login`, { email, password }, {
+        headers: { "ngrok-skip-browser-warning": "true" }
       });
-      
-      console.log("Resposta da API de login:", res.data);
-      
-      const { success, data } = res.data;
-      
-      if (success && data) {
-        // Agora pegamos user e token de dentro de data
-        const { user: loggedUser, token } = data;
-        
-        if (!loggedUser || !loggedUser.role) {
-          throw new Error("Dados do usuário não encontrados na resposta");
-        }
 
-        setUser(loggedUser.role);
+      const { success, data } = res.data;
+      if (success && data) {
+        const { user: loggedUser, token } = data;
+
+        setUser(loggedUser);
+        setToken(token);
+
         await AsyncStorage.setItem("token", token);
         await AsyncStorage.setItem("user", JSON.stringify(loggedUser));
       } else {
         throw new Error("Credenciais inválidas");
       }
-      
     } catch (error: any) {
       console.error("Erro no login:", error.response?.data || error.message);
       Alert.alert(
@@ -73,14 +72,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // REGISTER - Ajustado para usar 'image' em vez de 'foto' e sem hash
   const register = async (formData: any, photoUri?: string) => {
     try {
       const payload = new FormData();
 
       payload.append("fullName", formData.fullName);
       payload.append("email", formData.email);
-      payload.append("hashedPassword", formData.hashedPassword); // Testando se a API aceita senha sem hash
+      payload.append("hashedPassword", formData.hashedPassword); 
       payload.append("document", formData.document);
       payload.append("role", formData.role);
 
@@ -89,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const match = /\.(\w+)$/.exec(filename);
         const type = match ? `image/${match[1]}` : "image";
 
-        payload.append("image", { // Mudei de 'foto' para 'image'
+        payload.append("image", { 
           uri: photoUri,
           name: filename,
           type,
@@ -99,11 +97,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await axios.post(`${API_URL}/register`, payload, {
         headers: { 
           "Content-Type": "multipart/form-data",
-          "ngrok-skip-browser-warning": "true" // Adiciona header para ngrok
+          "ngrok-skip-browser-warning": "true"
         },
       });
 
-      // Sucesso no registro
       Alert.alert("Sucesso", "Conta criada com sucesso!");
       
     } catch (error: any) {
@@ -118,12 +115,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     setUser(null);
+    setToken(null);
     await AsyncStorage.removeItem("token");
     await AsyncStorage.removeItem("user");
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, register }}>
+    <AuthContext.Provider value={{ user, token, login, logout, register }}>
       {children}
     </AuthContext.Provider>
   );

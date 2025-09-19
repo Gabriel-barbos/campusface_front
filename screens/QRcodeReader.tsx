@@ -9,20 +9,34 @@ import {
   StatusBar,
   Alert,
   Vibration,
+  ActivityIndicator,
 } from 'react-native';
 import { Camera, CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
+import { useValidateQrCodeService } from '../services/ValidateQRcode';
 
 const { width, height } = Dimensions.get('window');
 const SCAN_AREA_SIZE = width * 0.7;
 
 interface QRScannerProps {}
 
+interface ValidationState {
+  isValidating: boolean;
+  isValid: boolean | null;
+  message: string;
+}
+
 const QRScanner: React.FC<QRScannerProps> = () => {
   const [permission, requestPermission] = useCameraPermissions();
   const [isScanning, setIsScanning] = useState(true);
   const [scannedData, setScannedData] = useState<string | null>(null);
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [validationState, setValidationState] = useState<ValidationState>({
+    isValidating: false,
+    isValid: null,
+    message: ''
+  });
+  
+  const { validateQrCode } = useValidateQrCodeService();
   
   // Animações
   const scanLineAnimation = useRef(new Animated.Value(0)).current;
@@ -99,43 +113,79 @@ const QRScanner: React.FC<QRScannerProps> = () => {
     }).start();
   };
 
-  const handleBarcodeScanned = (data: any) => {
-    if (!isScanning) return;
+  const handleBarcodeScanned = async (data: any) => {
+    if (!isScanning || validationState.isValidating) return;
 
     setIsScanning(false);
     setScannedData(data.data);
-    setShowSuccess(true);
+    setValidationState({ isValidating: true, isValid: null, message: 'Validando...' });
     
-    // Feedback tátil
     Vibration.vibrate(100);
-    
-    // Animações de sucesso
-    showSuccessAnimation();
-    startPulseAnimation();
 
-    // Mostrar alerta com os dados
-    setTimeout(() => {
-      Alert.alert(
-        'QR Code Lido!',
-        `Dados: ${data.data}`,
-        [
-          {
-            text: 'Escanear Novamente',
-            onPress: resetScanner,
-          },
-          {
-            text: 'OK',
-            style: 'default',
-          },
-        ]
-      );
-    }, 1000);
+    try {
+      const response = await validateQrCode(data.data);
+      
+      if (response.success) {
+        setValidationState({
+          isValidating: false,
+          isValid: true,
+          message: response.message || 'QR Code válido!'
+        });
+        
+        showSuccessAnimation();
+        startPulseAnimation();
+        
+        setTimeout(() => {
+          Alert.alert(
+            'Entrada Validada!',
+            response.message,
+            [
+              {
+                text: 'Continuar Escaneando',
+                onPress: resetScanner,
+              },
+              {
+                text: 'OK',
+                style: 'default',
+              },
+            ]
+          );
+        }, 1000);
+      } else {
+        throw new Error(response.message || 'QR Code inválido');
+      }
+    } catch (error: any) {
+      setValidationState({
+        isValidating: false,
+        isValid: false,
+        message: error.message || 'Erro na validação'
+      });
+      
+      Vibration.vibrate([100, 200, 100]);
+      
+      setTimeout(() => {
+        Alert.alert(
+          'Erro na Validação',
+          error.message,
+          [
+            {
+              text: 'Tentar Novamente',
+              onPress: resetScanner,
+            },
+            {
+              text: 'OK',
+              style: 'default',
+            },
+          ]
+        );
+      }, 500);
+    }
   };
 
   const resetScanner = () => {
     setIsScanning(true);
     setScannedData(null);
-    setShowSuccess(false);
+    setValidationState({ isValidating: false, isValid: null, message: '' });
     successAnimation.setValue(0);
     pulseAnimation.setValue(1);
   };
@@ -155,7 +205,7 @@ const QRScanner: React.FC<QRScannerProps> = () => {
           <Ionicons name="camera-outline" size={80} color="#666" />
           <Text style={styles.permissionTitle}>Acesso à Câmera Necessário</Text>
           <Text style={styles.permissionDescription}>
-            Para escanear códigos QR, precisamos acessar sua câmera
+            Para validar entrada via QR Code, precisamos acessar sua câmera
           </Text>
           <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
             <Text style={styles.permissionButtonText}>Permitir Acesso</Text>
@@ -171,9 +221,16 @@ const QRScanner: React.FC<QRScannerProps> = () => {
       
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Leitor de QR-code</Text>
+        <Text style={styles.headerTitle}>Validação de Entrada</Text>
         <Text style={styles.headerSubtitle}>
-          {isScanning ? 'Aponte para um QR Code' : 'QR Code detectado!'}
+          {isScanning 
+            ? 'Aponte para o QR Code' 
+            : validationState.isValidating 
+              ? 'Validando entrada...'
+              : validationState.isValid 
+                ? 'Entrada validada!' 
+                : 'Erro na validação'
+          }
         </Text>
       </View>
 
@@ -189,16 +246,13 @@ const QRScanner: React.FC<QRScannerProps> = () => {
         >
           {/* Overlay escuro */}
           <View style={styles.overlay}>
-            {/* Top overlay */}
             <View style={styles.overlayTop} />
             
-            {/* Middle section com scan area */}
             <View style={styles.overlayMiddle}>
               <View style={styles.overlaySide} />
               
               {/* Scan Area */}
               <View style={styles.scanArea}>
-                {/* Moldura do QR Code */}
                 <View style={styles.scanFrame}>
                   {/* Cantos da moldura */}
                   <Animated.View 
@@ -210,6 +264,7 @@ const QRScanner: React.FC<QRScannerProps> = () => {
                           inputRange: [0, 1],
                           outputRange: [0.5, 1],
                         }),
+                        borderColor: validationState.isValid === false ? '#FF0000' : '#FFF'
                       },
                     ]} 
                   />
@@ -222,6 +277,7 @@ const QRScanner: React.FC<QRScannerProps> = () => {
                           inputRange: [0, 1],
                           outputRange: [0.5, 1],
                         }),
+                        borderColor: validationState.isValid === false ? '#FF0000' : '#FFF'
                       },
                     ]} 
                   />
@@ -234,6 +290,7 @@ const QRScanner: React.FC<QRScannerProps> = () => {
                           inputRange: [0, 1],
                           outputRange: [0.5, 1],
                         }),
+                        borderColor: validationState.isValid === false ? '#FF0000' : '#FFF'
                       },
                     ]} 
                   />
@@ -246,6 +303,7 @@ const QRScanner: React.FC<QRScannerProps> = () => {
                           inputRange: [0, 1],
                           outputRange: [0.5, 1],
                         }),
+                        borderColor: validationState.isValid === false ? '#FF0000' : '#FFF'
                       },
                     ]} 
                   />
@@ -269,8 +327,15 @@ const QRScanner: React.FC<QRScannerProps> = () => {
                     />
                   )}
 
-                  {/* Ícone de sucesso */}
-                  {showSuccess && (
+                  {/* Loading */}
+                  {validationState.isValidating && (
+                    <View style={styles.loadingIcon}>
+                      <ActivityIndicator size="large" color="#FFF" />
+                    </View>
+                  )}
+
+                  {/* Ícone de sucesso/erro */}
+                  {validationState.isValid === true && (
                     <Animated.View
                       style={[
                         styles.successIcon,
@@ -286,13 +351,18 @@ const QRScanner: React.FC<QRScannerProps> = () => {
                       <Ionicons name="checkmark-circle" size={60} color="#00FF00" />
                     </Animated.View>
                   )}
+
+                  {validationState.isValid === false && (
+                    <Animated.View style={styles.errorIcon}>
+                      <Ionicons name="close-circle" size={60} color="#FF0000" />
+                    </Animated.View>
+                  )}
                 </View>
               </View>
               
               <View style={styles.overlaySide} />
             </View>
             
-            {/* Bottom overlay */}
             <View style={styles.overlayBottom} />
           </View>
         </CameraView>
@@ -304,18 +374,34 @@ const QRScanner: React.FC<QRScannerProps> = () => {
         <View style={styles.statusContainer}>
           <View style={[
             styles.statusDot,
-            { backgroundColor: isScanning ? '#00FF00' : showSuccess ? '#00FF00' : '#666' }
+            { 
+              backgroundColor: validationState.isValidating 
+                ? '#FFA500' 
+                : validationState.isValid === true 
+                  ? '#00FF00'
+                  : validationState.isValid === false
+                    ? '#FF0000'
+                    : isScanning 
+                      ? '#00FF00' 
+                      : '#666' 
+            }
           ]} />
           <Text style={styles.statusText}>
-            {isScanning ? 'Escaneando...' : showSuccess ? 'Sucesso!' : 'Pronto'}
+            {validationState.isValidating 
+              ? 'Validando...' 
+              : validationState.message || (isScanning ? 'Escaneando...' : 'Pronto')
+            }
           </Text>
         </View>
 
         {/* Dados escaneados */}
-        {scannedData && (
-          <View style={styles.dataContainer}>
-            <Text style={styles.dataLabel}>QR Code lido:</Text>
-            <Text style={styles.dataText} numberOfLines={3}>
+        {scannedData && !validationState.isValidating && (
+          <View style={[
+            styles.dataContainer,
+            { borderColor: validationState.isValid === false ? '#FF0000' : 'rgba(255, 255, 255, 0.2)' }
+          ]}>
+            <Text style={styles.dataLabel}>QR Code:</Text>
+            <Text style={styles.dataText} numberOfLines={2}>
               {scannedData}
             </Text>
           </View>
@@ -324,11 +410,10 @@ const QRScanner: React.FC<QRScannerProps> = () => {
         {/* Instruções */}
         <View style={styles.instructionsContainer}>
           <Text style={styles.instructionText}>• Mantenha o QR Code dentro da moldura</Text>
-       
         </View>
 
         {/* Botão de reset */}
-        {!isScanning && (
+        {!isScanning && !validationState.isValidating && (
           <TouchableOpacity style={styles.resetButton} onPress={resetScanner}>
             <Ionicons name="refresh-outline" size={20} color="#FFF" />
             <Text style={styles.resetButtonText}>Escanear Novamente</Text>
@@ -443,7 +528,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.8,
     shadowRadius: 3,
   },
+  loadingIcon: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   successIcon: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorIcon: {
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',

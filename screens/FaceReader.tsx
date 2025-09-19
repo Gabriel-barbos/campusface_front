@@ -8,20 +8,29 @@ import {
   TouchableOpacity,
   StatusBar,
   Modal,
+  Alert,
 } from 'react-native';
 import { Camera, CameraView } from 'expo-camera';
+import { useFaceRecognitionService } from '../services/FaceRecognitionService';
 
 const { width, height } = Dimensions.get('window');
 
 interface FaceReaderProps {}
 
-type ScanStatus = 'idle' | 'scanning' | 'success' | 'denied';
+type ScanStatus = 'idle' | 'scanning' | 'success' | 'denied' | 'error';
 
 const FaceReader: React.FC<FaceReaderProps> = () => {
   const [scanStatus, setScanStatus] = useState<ScanStatus>('idle');
   const [isScanning, setIsScanning] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  
+  // Referência para a câmera
+  const cameraRef = useRef<CameraView>(null);
+  
+  // Service
+  const { validateFace } = useFaceRecognitionService();
 
   // Animated values
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -125,27 +134,64 @@ const FaceReader: React.FC<FaceReaderProps> = () => {
     ]).start(() => {
       setShowResultModal(false);
       setScanStatus('idle');
+      setErrorMessage('');
     });
   };
 
-  const simulateFaceScan = () => {
+  const takePicture = async (): Promise<string | null> => {
+    if (!cameraRef.current) {
+      throw new Error('Câmera não disponível');
+    }
+
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+        base64: false,
+        skipProcessing: false,
+      });
+      
+      return photo.uri;
+    } catch (error) {
+      console.error('Erro ao tirar foto:', error);
+      throw new Error('Erro ao capturar imagem');
+    }
+  };
+
+  const performFaceRecognition = async () => {
     if (isScanning) return;
 
-    setIsScanning(true);
-    setScanStatus('scanning');
+    try {
+      setIsScanning(true);
+      setScanStatus('scanning');
+      setErrorMessage('');
 
-    // Simulate scanning for 2.5 seconds
-    setTimeout(() => {
+      // Capturar imagem
+      const imageUri = await takePicture();
+      if (!imageUri) {
+        throw new Error('Falha ao capturar imagem');
+      }
+
+      // Enviar para o backend
+      const result = await validateFace(imageUri);
+      
       setIsScanning(false);
       
-      // Randomly simulate success or failure
-      const isSuccess = Math.random() > 0.3; // 70% success rate
-      const newStatus = isSuccess ? 'success' : 'denied';
-      setScanStatus(newStatus);
-
-      // Show result modal
+      if (result.success) {
+        setScanStatus('success');
+      } else {
+        setScanStatus('denied');
+        setErrorMessage(result.message || 'Rosto não reconhecido');
+      }
+      
       setShowResultModal(true);
-    }, 2500);
+
+    } catch (error: any) {
+      console.error('Erro no reconhecimento facial:', error);
+      setIsScanning(false);
+      setScanStatus('error');
+      setErrorMessage(error.message || 'Erro interno do sistema');
+      setShowResultModal(true);
+    }
   };
 
   const getFrameColor = () => {
@@ -156,6 +202,8 @@ const FaceReader: React.FC<FaceReaderProps> = () => {
         return '#00FF00';
       case 'denied':
         return '#FF0000';
+      case 'error':
+        return '#FF6600';
       default:
         return '#FFFFFF';
     }
@@ -169,23 +217,52 @@ const FaceReader: React.FC<FaceReaderProps> = () => {
         return 'Rosto reconhecido com sucesso!';
       case 'denied':
         return 'Rosto não reconhecido';
+      case 'error':
+        return 'Erro no reconhecimento';
       default:
         return 'Posicione seu rosto dentro da moldura';
     }
   };
 
   const getResultModalContent = () => {
-    const isSuccess = scanStatus === 'success';
-    return {
-      icon: isSuccess ? '✓' : '⚠',
-      title: isSuccess ? 'Acesso Liberado' : 'Acesso Negado',
-      message: isSuccess 
-        ? 'Seu rosto foi reconhecido com sucesso. Bem-vindo!' 
-        : 'Não foi possível reconhecer seu rosto. Tente novamente.',
-      backgroundColor: isSuccess ? '#1a5d1a' : '#5d1a1a',
-      borderColor: isSuccess ? '#00ff00' : '#ff0000',
-      iconColor: isSuccess ? '#00ff00' : '#ff0000',
-    };
+    switch (scanStatus) {
+      case 'success':
+        return {
+          icon: '✓',
+          title: 'Acesso Liberado',
+          message: 'Seu rosto foi reconhecido com sucesso. Bem-vindo!',
+          backgroundColor: '#1a5d1a',
+          borderColor: '#00ff00',
+          iconColor: '#00ff00',
+        };
+      case 'denied':
+        return {
+          icon: '⚠',
+          title: 'Acesso Negado',
+          message: errorMessage || 'Não foi possível reconhecer seu rosto. Tente novamente.',
+          backgroundColor: '#5d1a1a',
+          borderColor: '#ff0000',
+          iconColor: '#ff0000',
+        };
+      case 'error':
+        return {
+          icon: '⚠',
+          title: 'Erro no Sistema',
+          message: errorMessage || 'Ocorreu um erro interno. Tente novamente.',
+          backgroundColor: '#5d2d1a',
+          borderColor: '#ff6600',
+          iconColor: '#ff6600',
+        };
+      default:
+        return {
+          icon: '⚠',
+          title: 'Erro',
+          message: 'Erro desconhecido',
+          backgroundColor: '#5d1a1a',
+          borderColor: '#ff0000',
+          iconColor: '#ff0000',
+        };
+    }
   };
 
   if (hasPermission === null) {
@@ -214,8 +291,9 @@ const FaceReader: React.FC<FaceReaderProps> = () => {
       
       {/* Camera View */}
       <CameraView 
+        ref={cameraRef}
         style={styles.camera}
-        facing="back"
+        facing="front" // Mudei para front para reconhecimento facial
         flash="off"
       >
         {/* Face Detection Frame */}
@@ -265,7 +343,11 @@ const FaceReader: React.FC<FaceReaderProps> = () => {
           </Text>
           
           {scanStatus === 'idle' && (
-            <TouchableOpacity style={styles.scanButton} onPress={simulateFaceScan}>
+            <TouchableOpacity 
+              style={styles.scanButton} 
+              onPress={performFaceRecognition}
+              disabled={isScanning}
+            >
               <Text style={styles.scanButtonText}>Iniciar Reconhecimento</Text>
             </TouchableOpacity>
           )}
@@ -326,12 +408,12 @@ const FaceReader: React.FC<FaceReaderProps> = () => {
                 </Text>
               </TouchableOpacity>
               
-              {scanStatus === 'denied' && (
+              {(scanStatus === 'denied' || scanStatus === 'error') && (
                 <TouchableOpacity 
                   style={[styles.modalButton, styles.modalButtonSecondary, { backgroundColor: modalContent.iconColor }]} 
                   onPress={() => {
                     hideModal();
-                    setTimeout(() => simulateFaceScan(), 500);
+                    setTimeout(() => performFaceRecognition(), 500);
                   }}
                 >
                   <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>
@@ -543,14 +625,14 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     marginHorizontal: 5,
     alignItems: 'center',
+    borderWidth: 2,
   },
-  modalButtonPrimary: {
-    backgroundColor: '#000000',
+  modalButtonSecondary: {
+    borderWidth: 0,
   },
   modalButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
   },
 });
 

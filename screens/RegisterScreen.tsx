@@ -21,7 +21,7 @@ export default function RegisterScreen({ navigation, route }) {
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
-    hashedPassword: "", // Voltando para 'hashedPassword' para testar com a API
+    hashedPassword: "", 
     document: "",
     role: "MEMBER"
   });
@@ -45,7 +45,7 @@ export default function RegisterScreen({ navigation, route }) {
   };
 
   const handlePhotoSelect = () => {
-    navigation.navigate('FaceRegister', { isRegistration: true });
+    navigation.navigate('CameraCapture', { isRegistration: true });
   };
 
 const handleRegister = async () => {

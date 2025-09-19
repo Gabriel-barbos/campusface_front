@@ -1,7 +1,7 @@
 import axios from "axios";
 import { useAuth } from "../AuthContext";
 
-const API_URL = "https://949fbca4150a.ngrok-free.app/validate/face";
+const API_URL = "https://949fbca4150a.ngrok-free.app/face/identify";
 
 export const useFaceRecognitionService = () => {
   const { user, token } = useAuth();
@@ -19,12 +19,12 @@ export const useFaceRecognitionService = () => {
       const formData = new FormData();
       formData.append("image", {
         uri: imageUri,
-        type: "image/jpeg", // ajuste conforme o tipo real da imagem (jpeg/png)
+        type: "image/jpeg", 
         name: "face.jpg",
       } as any);
 
       const response = await axios.post(
-        `${API_URL}/${user.id}`,
+        `${API_URL}`,
         formData,
         {
           headers: {
